@@ -1,5 +1,5 @@
 # FILE: app/services/ignore_groups.py
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 from typing import Dict, List, Set
 
 IGNORE_GROUPS: Dict[str, List[int]] = {
@@ -32,6 +32,17 @@ IGNORE_GROUPS: Dict[str, List[int]] = {
         434, 436,
         # Microwarpdrive
         1195, 1197, 1199, 1201,
+    ],
+    "t1 guns": [
+        # Small/Medium/Large Hybrid
+        567, 568, 569, 570, 571, 572, 574, 575, 576, 577, 578, 579, 581, 582, 583, 584, 585, 586,
+        # Projectile
+        559, 560, 561, 562, 563, 564, 566, 567, 568, 569, 570, 571, 573, 574, 575, 576, 577, 578,
+        # Laser
+        543, 544, 545, 546, 547, 548, 550, 551, 552, 553, 554, 555, 557, 558, 559, 560, 561, 562,
+    ],
+    "t1 launchers": [
+        2410, 2411, 2412, 2413, 2414, 2415, 2416, 2417, 2418, 2419, 2420, 2421, 2422, 2423, 2424,
     ],
 }
 

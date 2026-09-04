@@ -1,5 +1,5 @@
 # FILE: app/ui/widgets/ignore_list_dialog.py
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 import logging
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QPushButton,
@@ -36,6 +36,17 @@ class IgnoreListDialog(QDialog):
         group_names = get_ignore_group_names()
         current_settings = self.app_state.settings.trade_ignore_groups
 
+        # Add Select All / Deselect All
+        select_layout = QHBoxLayout()
+        btn_select_all = QPushButton("Select All")
+        btn_select_all.clicked.connect(lambda: self._set_all_checkboxes(True))
+        btn_deselect_all = QPushButton("Deselect All")
+        btn_deselect_all.clicked.connect(lambda: self._set_all_checkboxes(False))
+        select_layout.addWidget(btn_select_all)
+        select_layout.addWidget(btn_deselect_all)
+        select_layout.addStretch()
+        layout.addLayout(select_layout)
+
         for name in group_names:
             chk = QCheckBox(name.title())
             chk.setChecked(current_settings.get(name, False))
@@ -53,6 +64,10 @@ class IgnoreListDialog(QDialog):
         btn_layout.addWidget(btn_cancel)
         btn_layout.addWidget(btn_save)
         layout.addLayout(btn_layout)
+
+    def _set_all_checkboxes(self, checked: bool) -> None:
+        for chk in self.checkboxes.values():
+            chk.setChecked(checked)
 
     def _save_and_close(self) -> None:
         s = self.app_state.settings

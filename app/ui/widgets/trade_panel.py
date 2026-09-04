@@ -1,5 +1,5 @@
 # FILE: app/ui/widgets/trade_panel.py
-# VERSION: 1.23.0
+# VERSION: 1.23.1
 import logging
 import time
 from PySide6.QtWidgets import (
@@ -337,7 +337,8 @@ class TradePanel(QGroupBox):
 
     def open_ignore_list(self) -> None:
         dialog = IgnoreListDialog(self.app_state, self)
-        dialog.exec()
+        if dialog.exec():
+            self.start_calculation()
         dialog.deleteLater()
 
     def _tree_context_menu(self, pos) -> None:
