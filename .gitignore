@@ -7,3 +7,4 @@ logs/
 *.db
 .cursor/
 start.bat
+/Plan
