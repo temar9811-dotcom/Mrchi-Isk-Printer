@@ -1,5 +1,5 @@
 # FILE: app/ui/widgets/trade_panel.py
-# VERSION: 1.22.0
+# VERSION: 1.23.0
 import logging
 import time
 from PySide6.QtWidgets import (
@@ -27,6 +27,8 @@ from app.ui.widgets.isk_spinbox import IskSpinBox
 from app.ui.widgets.trade_panel_calc import (
     get_active_batch_exclusions, group_into_batches_smart,
 )
+from app.services.ignore_groups import get_ignore_group_names, get_type_ids_for_groups
+from app.ui.widgets.ignore_list_dialog import IgnoreListDialog
 from app.utils.formatting import fmt_num, fmt_age
 
 STRUCTURE_ID_THRESHOLD = 1_000_000_000
@@ -91,6 +93,9 @@ class TradePanel(QGroupBox):
         self.chk_use_wallet = QCheckBox("Use buy char wallet")
         self.chk_use_wallet.toggled.connect(self._on_wallet_toggled)
         self.row2.addWidget(self.chk_use_wallet)
+        self.btn_ignore_list = QPushButton("Ignore List")
+        self.btn_ignore_list.clicked.connect(self.open_ignore_list)
+        self.row2.addWidget(self.btn_ignore_list)
         self.row2.addStretch()
         self._load_haul_boxes()
 
@@ -330,6 +335,11 @@ class TradePanel(QGroupBox):
         dialog.exec()
         dialog.deleteLater()
 
+    def open_ignore_list(self) -> None:
+        dialog = IgnoreListDialog(self.app_state, self)
+        dialog.exec()
+        dialog.deleteLater()
+
     def _tree_context_menu(self, pos) -> None:
         item = self.tree.itemAt(pos)
         if item is None:
@@ -389,6 +399,12 @@ class TradePanel(QGroupBox):
                 self.app_state.db, s.trade_buy_character_id or 0, s.trade_sell_character_id or 0
             )
             blacklist = blacklist.union(active_exclusions)
+
+        enabled_groups = {name for name, enabled in self.app_state.settings.trade_ignore_groups.items() if enabled}
+        if enabled_groups:
+            ignored_ids = get_type_ids_for_groups(enabled_groups)
+            blacklist = blacklist.union(ignored_ids)
+            self.logger.info("Excluding %d type_ids from ignore groups", len(ignored_ids))
 
         params = {
             "buy_region": buy_region, "buy_loc": buy_loc,

@@ -1,8 +1,8 @@
 # FILE: app/settings/app_settings.py
-# VERSION: 1.5.0
+# VERSION: 1.6.0
 import logging
-from dataclasses import asdict, dataclass, fields
-from typing import Any, Dict, Optional
+from dataclasses import asdict, dataclass, field, fields
+from typing import Any, Dict, Optional, Set
 
 SETTINGS_JSON_KEY = "app_settings"
 logger = logging.getLogger("app.settings.model")
@@ -43,6 +43,7 @@ class AppSettings:
     trade_layout_width_threshold: int = 1200  # 0 = disabled
     trade_exclude_active_batches: bool = True
     trade_max_merge_attempts: int = 0  # 0 = unlimited
+    trade_ignore_groups: Dict[str, bool] = field(default_factory=dict)
 
     # Citadel tax defaults (ESI cannot read player-set rates)
     citadel_sales_tax_pct: float = 2.0
