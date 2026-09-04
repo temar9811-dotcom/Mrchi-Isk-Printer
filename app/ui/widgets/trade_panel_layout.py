@@ -35,6 +35,7 @@ class ResponsiveLayoutManager:
         narrow_layout.addLayout(r2)
         narrow_layout.addLayout(r3)
         narrow_layout.addLayout(r4)
+        narrow_layout.addStretch() # ADDED STRETCH TO PUSH CONTENT UP
 
         # Wide container: 2 combined rows (r1+r2 on top, r3+r4 on bottom)
         wide_layout = QVBoxLayout(self.wide_container)
@@ -54,6 +55,7 @@ class ResponsiveLayoutManager:
         c2.addSpacing(16)
         c2.addLayout(r4)
         wide_layout.addLayout(c2)
+        wide_layout.addStretch() # ADDED STRETCH TO PUSH CONTENT UP
 
         self.stacked_widget.addWidget(self.narrow_container)  # index 0
         self.stacked_widget.addWidget(self.wide_container)    # index 1
