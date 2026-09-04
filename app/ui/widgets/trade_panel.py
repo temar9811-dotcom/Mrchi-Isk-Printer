@@ -1,11 +1,11 @@
 # FILE: app/ui/widgets/trade_panel.py
-# VERSION: 1.21.0
+# VERSION: 1.22.0
 import logging
 import time
 from PySide6.QtWidgets import (
     QGroupBox, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSpinBox, QDoubleSpinBox, QTreeWidget, QTreeWidgetItem, QCheckBox,
-    QHeaderView, QSplitter, QMessageBox, QComboBox, QMenu, QWidget,
+    QHeaderView, QSplitter, QMessageBox, QComboBox, QMenu, QWidget, QSizePolicy,
 )
 from PySide6.QtCore import Qt, QTimer
 from app.state.app_state import AppState
@@ -27,7 +27,6 @@ from app.ui.widgets.isk_spinbox import IskSpinBox
 from app.ui.widgets.trade_panel_calc import (
     get_active_batch_exclusions, group_into_batches_smart,
 )
-from app.ui.widgets.trade_panel_layout import ResponsiveLayoutManager
 from app.utils.formatting import fmt_num, fmt_age
 
 STRUCTURE_ID_THRESHOLD = 1_000_000_000
@@ -151,11 +150,10 @@ class TradePanel(QGroupBox):
         self.btn_calc.clicked.connect(self.start_calculation)
         self.row4.addWidget(self.btn_calc)
 
-        # Setup responsive layout manager
-        threshold = self.app_state.settings.trade_layout_width_threshold
-        self.layout_manager = ResponsiveLayoutManager(self, threshold=threshold)
-        self.layout_manager.setup_layouts([self.row1, self.row2, self.row3, self.row4])
-        main_layout.addWidget(self.layout_manager.stacked_widget)
+        main_layout.addLayout(self.row1)
+        main_layout.addLayout(self.row2)
+        main_layout.addLayout(self.row3)
+        main_layout.addLayout(self.row4)
 
         splitter = QSplitter(Qt.Orientation.Vertical, self)
         self.tree = QTreeWidget(splitter)
@@ -186,11 +184,6 @@ class TradePanel(QGroupBox):
         self.status_label = QLabel("Ready.")
         self.status_label.setStyleSheet("color: #8f9baa;")
         main_layout.addWidget(self.status_label)
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        if hasattr(self, 'layout_manager'):
-            self.layout_manager.update_on_resize(event.size().width())
 
     def _load_haul_boxes(self) -> None:
         s = self.app_state.settings
