@@ -1,5 +1,5 @@
 # FILE: app/ui/widgets/trade_panel.py
-# VERSION: 1.18.0
+# VERSION: 1.21.0
 import logging
 import time
 from PySide6.QtWidgets import (
@@ -21,10 +21,13 @@ from app.models.trade_batch import (
 from app.ui.widgets.trade_worker import TradeWorker, MarketRefreshWorker
 from app.ui.widgets.batch_list_widget import BatchListWidget
 from app.ui.widgets.blacklist_dialog import BlacklistDialog
+from app.services.price_alert_service import PriceAlertService
+from app.ui.widgets.price_alerts_dialog import PriceAlertsDialog
 from app.ui.widgets.isk_spinbox import IskSpinBox
 from app.ui.widgets.trade_panel_calc import (
     get_active_batch_exclusions, group_into_batches_smart,
 )
+from app.ui.widgets.trade_panel_layout import ResponsiveLayoutManager
 from app.utils.formatting import fmt_num, fmt_age
 
 STRUCTURE_ID_THRESHOLD = 1_000_000_000
@@ -51,106 +54,114 @@ class TradePanel(QGroupBox):
         self.update_market_age()
 
     def _build_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 12, 8, 8)
-        layout.setSpacing(6)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(8, 12, 8, 8)
+        main_layout.setSpacing(6)
 
         # Row 1: cycle / items / share
-        s = QHBoxLayout()
-        s.addWidget(QLabel("Cycle (days):"))
+        self.row1 = QHBoxLayout()
+        self.row1.addWidget(QLabel("Cycle (days):"))
         self.spin_cycle = QSpinBox(); self.spin_cycle.setRange(1, 90)
         self.spin_cycle.setValue(self.app_state.settings.trade_cycle_days)
-        s.addWidget(self.spin_cycle)
-        s.addWidget(QLabel("Max Items:"))
+        self.row1.addWidget(self.spin_cycle)
+        self.row1.addWidget(QLabel("Max Items:"))
         self.spin_items = QSpinBox(); self.spin_items.setRange(1, 100)
         self.spin_items.setValue(self.app_state.settings.trade_item_limit)
-        s.addWidget(self.spin_items)
-        s.addWidget(QLabel("My share %:"))
+        self.row1.addWidget(self.spin_items)
+        self.row1.addWidget(QLabel("My share %:"))
         self.spin_share = QDoubleSpinBox(); self.spin_share.setRange(0.1, 100.0)
         self.spin_share.setDecimals(1); self.spin_share.setSingleStep(0.5)
         self.spin_share.setValue(self.app_state.settings.trade_market_share_pct)
-        s.addWidget(self.spin_share)
-        s.addStretch()
-        layout.addLayout(s)
+        self.row1.addWidget(self.spin_share)
+        self.row1.addStretch()
 
         # Row 2: hauling + budget
-        h = QHBoxLayout()
-        h.addWidget(QLabel("ISK/m3:"))
+        self.row2 = QHBoxLayout()
+        self.row2.addWidget(QLabel("ISK/m3:"))
         self.spin_haul_m3 = IskSpinBox()
-        h.addWidget(self.spin_haul_m3)
-        h.addWidget(QLabel("Min load:"))
+        self.row2.addWidget(self.spin_haul_m3)
+        self.row2.addWidget(QLabel("Min load:"))
         self.spin_haul_min = IskSpinBox()
-        h.addWidget(self.spin_haul_min)
-        h.addWidget(QLabel("Full load:"))
+        self.row2.addWidget(self.spin_haul_min)
+        self.row2.addWidget(QLabel("Full load:"))
         self.spin_haul_full = IskSpinBox()
-        h.addWidget(self.spin_haul_full)
-        h.addWidget(QLabel("Budget (0=off):"))
+        self.row2.addWidget(self.spin_haul_full)
+        self.row2.addWidget(QLabel("Budget (0=off):"))
         self.spin_budget = IskSpinBox()
-        h.addWidget(self.spin_budget)
+        self.row2.addWidget(self.spin_budget)
         self.chk_use_wallet = QCheckBox("Use buy char wallet")
         self.chk_use_wallet.toggled.connect(self._on_wallet_toggled)
-        h.addWidget(self.chk_use_wallet)
-        h.addStretch()
-        layout.addLayout(h)
+        self.row2.addWidget(self.chk_use_wallet)
+        self.row2.addStretch()
         self._load_haul_boxes()
 
         # Row 3: hubs
-        hb = QHBoxLayout()
+        self.row3 = QHBoxLayout()
         self.chk_use_hubs = QCheckBox("Use Regional Hubs")
         self.chk_use_hubs.toggled.connect(self._on_hubs_toggled)
-        hb.addWidget(self.chk_use_hubs)
-        hb.addWidget(QLabel("Buy hub:"))
+        self.row3.addWidget(self.chk_use_hubs)
+        self.row3.addWidget(QLabel("Buy hub:"))
         self.combo_buy_hub = QComboBox()
         self.combo_buy_hub.addItems([DEFAULT_HUB_LABEL] + list(REGIONAL_HUBS.keys()))
         self.combo_buy_hub.setEnabled(False)
-        hb.addWidget(self.combo_buy_hub)
-        hb.addWidget(QLabel("Sell hub:"))
+        self.row3.addWidget(self.combo_buy_hub)
+        self.row3.addWidget(QLabel("Sell hub:"))
         self.combo_sell_hub = QComboBox()
         self.combo_sell_hub.addItems([DEFAULT_HUB_LABEL] + list(REGIONAL_HUBS.keys()))
         self.combo_sell_hub.setEnabled(False)
-        hb.addWidget(self.combo_sell_hub)
+        self.row3.addWidget(self.combo_sell_hub)
         self.chk_auto_refresh = QCheckBox("Auto-refresh (20 min)")
         self.chk_auto_refresh.setToolTip("Automatically refresh market every 20 minutes")
         self.chk_auto_refresh.setChecked(self.app_state.settings.trade_auto_refresh_minutes > 0)
         self.chk_auto_refresh.toggled.connect(self._on_auto_refresh_toggled)
-        hb.addWidget(self.chk_auto_refresh)
-        hb.addStretch()
-        layout.addLayout(hb)
+        self.row3.addWidget(self.chk_auto_refresh)
+        self.row3.addStretch()
         self._load_hub_boxes()
 
-        # Row 4: toggles + refresh + blacklist + calculate
-        s2 = QHBoxLayout()
+        # Row 4: toggles + refresh + blacklist + price alerts + calculate
+        self.row4 = QHBoxLayout()
         self.chk_instant_buy = QCheckBox("Instant Buy")
-        s2.addWidget(self.chk_instant_buy)
+        self.row4.addWidget(self.chk_instant_buy)
         self.chk_instant_sell = QCheckBox("Instant Sell")
-        s2.addWidget(self.chk_instant_sell)
+        self.row4.addWidget(self.chk_instant_sell)
         self.chk_invert = QCheckBox("Invert")
         self.chk_invert.setToolTip("Swap buy and sell stations")
-        s2.addWidget(self.chk_invert)
+        self.row4.addWidget(self.chk_invert)
         self.chk_exclude_active = QCheckBox("Exclude active batches")
         self.chk_exclude_active.setChecked(self.app_state.settings.trade_exclude_active_batches)
         self.chk_exclude_active.toggled.connect(self._on_exclude_active_toggled)
-        s2.addWidget(self.chk_exclude_active)
+        self.row4.addWidget(self.chk_exclude_active)
+        self.chk_include_alerted = QCheckBox("Include alerted items")
+        self.chk_include_alerted.setToolTip("Include items flagged by unexpected price drop alerts")
+        self.row4.addWidget(self.chk_include_alerted)
         self.btn_refresh_market = QPushButton("Refresh Market")
         self.btn_refresh_market.clicked.connect(self.refresh_market)
-        s2.addWidget(self.btn_refresh_market)
+        self.row4.addWidget(self.btn_refresh_market)
         self.lbl_market_age = QLabel("Market: never")
         self.lbl_market_age.setStyleSheet("color: #8f9baa;")
-        s2.addWidget(self.lbl_market_age)
+        self.row4.addWidget(self.lbl_market_age)
         self.btn_blacklist = QPushButton("Blacklist")
         self.btn_blacklist.clicked.connect(self.open_blacklist)
-        s2.addWidget(self.btn_blacklist)
-        s2.addStretch()
+        self.row4.addWidget(self.btn_blacklist)
+        self.btn_price_alerts = QPushButton("Price Alerts")
+        self.btn_price_alerts.clicked.connect(self.open_price_alerts)
+        self.row4.addWidget(self.btn_price_alerts)
+        self.row4.addStretch()
         self.btn_calc = QPushButton("Calculate Recommended Batches")
         self.btn_calc.clicked.connect(self.start_calculation)
-        s2.addWidget(self.btn_calc)
-        layout.addLayout(s2)
+        self.row4.addWidget(self.btn_calc)
+
+        # Setup responsive layout manager
+        threshold = self.app_state.settings.trade_layout_width_threshold
+        self.layout_manager = ResponsiveLayoutManager(self, threshold=threshold)
+        self.layout_manager.setup_layouts([self.row1, self.row2, self.row3, self.row4])
+        main_layout.addWidget(self.layout_manager.stacked_widget)
 
         splitter = QSplitter(Qt.Orientation.Vertical, self)
         self.tree = QTreeWidget(splitter)
         self.tree.setHeaderLabels(
             ["Batch / Item", "Qty", "Sellable", "Buy", "Sell", "Vol (m3)",
-             "Haul", "Fees", "Profit", "ISK/m3"]
+             "Haul", "Fees", "Profit", "ISK/m3", "Shift"]
         )
         self.tree.setAlternatingRowColors(True)
         self.tree.setSelectionMode(QTreeWidget.SelectionMode.ExtendedSelection)
@@ -164,17 +175,22 @@ class TradePanel(QGroupBox):
         self.btn_accept.clicked.connect(self.accept_selected)
         accept_layout.addWidget(self.btn_accept)
         accept_layout.addStretch()
-        layout.addLayout(accept_layout)
+        main_layout.addLayout(accept_layout)
 
         self.batch_list = BatchListWidget(self.app_state, splitter)
         splitter.addWidget(self.batch_list)
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 2)
-        layout.addWidget(splitter, 1)
+        main_layout.addWidget(splitter, 1)
 
         self.status_label = QLabel("Ready.")
         self.status_label.setStyleSheet("color: #8f9baa;")
-        layout.addWidget(self.status_label)
+        main_layout.addWidget(self.status_label)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, 'layout_manager'):
+            self.layout_manager.update_on_resize(event.size().width())
 
     def _load_haul_boxes(self) -> None:
         s = self.app_state.settings
@@ -243,6 +259,12 @@ class TradePanel(QGroupBox):
         s.trade_buy_hub = self.combo_buy_hub.currentText()
         s.trade_sell_hub = self.combo_sell_hub.currentText()
         self.app_state.save_settings()
+
+    def open_price_alerts(self) -> None:
+        alert_service = PriceAlertService(self.app_state.db)
+        alert_service.scan_for_drops(threshold_pct=15.0)
+        dlg = PriceAlertsDialog(self.app_state.db, self)
+        dlg.exec()
 
     def _effective_locations(self):
         s = self.app_state.settings
@@ -434,17 +456,19 @@ class TradePanel(QGroupBox):
         for batch in regrouped:
             batch_item = QTreeWidgetItem([
                 f"{batch.batch_name} ({batch.total_volume:,.0f} m3, spend {fmt_num(batch.total_buy)})",
-                "", "", "", "", "", "", "", f"{fmt_num(batch.total_profit)} ISK", "",
+                "", "", "", "", "", "", "", f"{fmt_num(batch.total_profit)} ISK", "", "",
             ])
             batch_item.setData(0, Qt.ItemDataRole.UserRole, batch)
             batch_item.setForeground(0, text_color)
             for r in batch.items:
                 prefix = "⚡ " if hasattr(r, 'sell_mode') and r.sell_mode == "instant" else "  "
+                shift_display = f"{r.shift_ratio:.2f}" if hasattr(r, 'shift_ratio') else "1.00"
                 child = QTreeWidgetItem([
                     f"{prefix}{r.type_name}", f"{r.quantity:,}", f"{r.est_sellable:,}",
                     f"{r.buy_price:,.2f}", f"{r.sell_price:,.2f}", f"{r.total_volume:,.1f}",
                     fmt_num(r.hauling_cost), fmt_num(r.tax_cost), fmt_num(r.net_profit),
                     f"{r.profit_per_m3:,.2f}",
+                    shift_display,
                 ])
                 child.setData(0, Qt.ItemDataRole.UserRole, r)
                 if is_all_negative:
